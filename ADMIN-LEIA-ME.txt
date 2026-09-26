@@ -1,0 +1,12 @@
+PAINEL DE ADMINISTRAÇÃO — SCALDASEBETA 3D
+
+admin.html é um protótipo visual do painel privado.
+O site público continua em index.html.
+
+Para ter segurança real:
+- autenticação por palavra-passe no servidor;
+- base de dados para produtos, stock, encomendas e clientes;
+- controlo de sessões/permissões;
+- integração com um sistema de faturação adequado.
+
+Não colocar dados pessoais reais neste protótipo sem essa camada de segurança.

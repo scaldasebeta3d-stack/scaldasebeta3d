@@ -1,0 +1,29 @@
+{
+  "products": {
+    "id": "string",
+    "name": "string",
+    "description": "string",
+    "price": "number",
+    "stock": "integer",
+    "status": "available|maintenance|unavailable",
+    "image": "string"
+  },
+  "orders": {
+    "id": "string",
+    "customer_name": "string",
+    "phone": "string",
+    "items": "array",
+    "shipping": "number",
+    "total": "number",
+    "payment_status": "pending|paid|cancelled",
+    "order_status": "new|preparing|shipped|completed|cancelled",
+    "created_at": "datetime"
+  },
+  "customers": {
+    "id": "string",
+    "name": "string",
+    "phone": "string",
+    "email": "string",
+    "created_at": "datetime"
+  }
+}

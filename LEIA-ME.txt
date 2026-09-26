@@ -1,0 +1,15 @@
+SCALDASEBETA 3D — SISTEMA DE LOJA + GESTÃO
+
+Esta pasta mantém o site público e o painel administrativo.
+
+O painel permite testar alteração de preço, stock e estado neste navegador.
+Isto NÃO é ainda uma base de dados online nem um sistema de autenticação.
+
+Para produção:
+- backend/API
+- base de dados
+- autenticação segura
+- integração de encomendas
+- integração de faturação adequada/certificada
+
+O cliente continua a usar apenas index.html.

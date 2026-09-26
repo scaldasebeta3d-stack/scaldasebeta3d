@@ -1,0 +1,14 @@
+const express=require("express");
+const cors=require("cors");
+const app=express();
+app.use(cors()); app.use(express.json());
+let products=[]; let orders=[]; let customers=[];
+app.get("/api/products",(req,res)=>res.json(products));
+app.post("/api/products",(req,res)=>{const p={id:Date.now().toString(),...req.body};products.push(p);res.status(201).json(p)});
+app.put("/api/products/:id",(req,res)=>{const i=products.findIndex(p=>p.id===req.params.id);if(i<0)return res.sendStatus(404);products[i]={...products[i],...req.body};res.json(products[i])});
+app.get("/api/orders",(req,res)=>res.json(orders));
+app.post("/api/orders",(req,res)=>{const o={id:Date.now().toString(),...req.body};orders.push(o);res.status(201).json(o)});
+app.get("/api/customers",(req,res)=>res.json(customers));
+app.post("/api/customers",(req,res)=>{const c={id:Date.now().toString(),...req.body};customers.push(c);res.status(201).json(c)});
+app.get("/api/health",(req,res)=>res.json({ok:true}));
+app.listen(process.env.PORT||3000,()=>console.log("ScaldaseBeta API pronta"));

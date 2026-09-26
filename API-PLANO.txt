@@ -1,0 +1,33 @@
+SCALDAS E BETA 3D — PLANO DO SISTEMA
+
+SITE PÚBLICO
+- index.html
+- clientes não veem stock interno nem painel.
+
+ADMINISTRAÇÃO
+- admin.html
+- gestão de produtos, preço, stock e estado.
+- a edição nesta versão é guardada apenas no navegador (localStorage).
+
+PARA A VERSÃO ONLINE REAL
+1. Criar backend/API.
+2. Criar base de dados.
+3. Criar login seguro do administrador.
+4. Ligar produtos do site à base de dados.
+5. Ligar encomendas à base de dados.
+6. Atualizar stock automaticamente quando uma encomenda for confirmada.
+7. Adicionar histórico de clientes e encomendas.
+8. Integrar um sistema de faturação adequado/certificado em Portugal.
+
+ENDPOINTS SUGERIDOS
+GET    /api/products
+POST   /api/products
+PUT    /api/products/:id
+GET    /api/orders
+POST   /api/orders
+PUT    /api/orders/:id
+GET    /api/customers
+POST   /api/auth/login
+
+SEGURANÇA
+Nunca guardar palavras-passe no HTML/JavaScript. A autenticação deve ser feita no servidor com sessão/token seguro.

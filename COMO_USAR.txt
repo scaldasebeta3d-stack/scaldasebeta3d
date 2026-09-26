@@ -1,0 +1,10 @@
+SCALDAS E BETA 3D — PACOTE COMPLETO
+
+1. index.html = site público.
+2. admin.html = painel de gestão local.
+3. server/ = início da API para a futura versão online real.
+4. O cliente não deve ter acesso ao painel de administração.
+5. Para produção é necessário alojar a API e uma base de dados num serviço de backend.
+6. A faturação deve ser integrada com um sistema de faturação adequado/certificado em Portugal.
+
+Este pacote preserva o conteúdo do ZIP anterior e acrescenta a estrutura de gestão.
