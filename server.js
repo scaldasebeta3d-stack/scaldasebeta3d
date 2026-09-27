@@ -10,6 +10,25 @@ const DATA_FILE = path.join(__dirname, "data.json");
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "3mb" }));
+
+// Mantém a página pública atual e repõe apenas as imagens originais,
+// sem alterar o restante do HTML, layout ou funcionalidades.
+app.get("/", (req, res, next) => {
+  try {
+    const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+    const logo = fs.readFileSync(path.join(__dirname, "hero-logo.txt"), "utf8").trim();
+    const imageBlock = `<img class="hero-image" src="${logo}" alt="ScaldaseBeta 3D">`;
+    const watermark = `<style>.hero-image{width:78%;height:78%;object-fit:contain;border-radius:14px;position:relative;z-index:1;filter:drop-shadow(0 18px 35px rgba(0,0,0,.45))}.hero-art .badge{z-index:2}body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.045;background:url("${logo}") center 58%/520px auto no-repeat;pointer-events:none}</style>`;
+    const output = html.replace("</head>", watermark + "</head>").replace(
+      '<div class="hero-art"><div class="badge">',
+      `<div class="hero-art">${imageBlock}<div class="badge">`
+    );
+    res.type("html").send(output);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.use(express.static(__dirname));
 
 function loadData() {
