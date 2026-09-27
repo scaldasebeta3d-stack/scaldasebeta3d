@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, "data.json");
 
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "3mb" }));
 app.use(express.static(__dirname));
 
 function loadData() {
@@ -31,6 +31,8 @@ const SESSION_MS = 1000 * 60 * 60 * 8;
 
 const ADMIN_USER = process.env.ADMIN_USER || "";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const MBWAY_PAYMENT_URL = process.env.MBWAY_PAYMENT_URL || "";
+const PAYPAL_PAYMENT_URL = process.env.PAYPAL_PAYMENT_URL || "";
 
 function getCookie(req, name) {
   const header = req.headers.cookie || "";
@@ -58,6 +60,15 @@ function requireAdmin(req, res, next) {
 function id() {
   return crypto.randomUUID();
 }
+
+app.get("/api/config", (req, res) => {
+  res.json({
+    mbway_payment_url: MBWAY_PAYMENT_URL,
+    paypal_payment_url: PAYPAL_PAYMENT_URL,
+    mbway_ready: Boolean(MBWAY_PAYMENT_URL),
+    paypal_ready: Boolean(PAYPAL_PAYMENT_URL)
+  });
+});
 
 app.post("/api/auth/login", (req, res) => {
   if (!ADMIN_USER || !ADMIN_PASSWORD) {
@@ -93,19 +104,26 @@ app.post("/api/products", requireAdmin, (req, res) => {
     image: String(req.body.image || "").trim()
   };
   if (!product.name) return res.status(400).json({ error: "Nome do produto é obrigatório." });
-  db.products.push(product); saveData(); res.status(201).json(product);
+  if (product.image && !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(product.image) && !/^https?:\/\//i.test(product.image)) {
+    return res.status(400).json({ error: "A fotografia deve ser uma imagem válida." });
+  }
+  db.products.push(product);
+  saveData();
+  res.status(201).json(product);
 });
 app.put("/api/products/:id", requireAdmin, (req, res) => {
   const index = db.products.findIndex(p => p.id === req.params.id);
   if (index < 0) return res.sendStatus(404);
   db.products[index] = { ...db.products[index], ...req.body, id: db.products[index].id };
-  saveData(); res.json(db.products[index]);
+  saveData();
+  res.json(db.products[index]);
 });
 app.delete("/api/products/:id", requireAdmin, (req, res) => {
   const before = db.products.length;
   db.products = db.products.filter(p => p.id !== req.params.id);
   if (db.products.length === before) return res.sendStatus(404);
-  saveData(); res.sendStatus(204);
+  saveData();
+  res.sendStatus(204);
 });
 
 app.get("/api/orders", requireAdmin, (req, res) => res.json(db.orders));
@@ -134,7 +152,8 @@ app.put("/api/orders/:id", requireAdmin, (req, res) => {
   const index = db.orders.findIndex(o => o.id === req.params.id);
   if (index < 0) return res.sendStatus(404);
   db.orders[index] = { ...db.orders[index], ...req.body, id: db.orders[index].id };
-  saveData(); res.json(db.orders[index]);
+  saveData();
+  res.json(db.orders[index]);
 });
 
 app.get("/api/customers", requireAdmin, (req, res) => res.json(db.customers));
