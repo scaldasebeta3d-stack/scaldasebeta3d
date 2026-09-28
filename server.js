@@ -6,7 +6,8 @@ const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, "data.json");
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "3mb" }));
@@ -24,10 +25,6 @@ app.get("/", (req, res, next) => {
 app.get("/admin", (req, res, next) => { try { res.sendFile(path.join(__dirname, "admin.html")); } catch (error) { next(error); } });
 app.use(express.static(__dirname));
 
-function loadData() { try { if (fs.existsSync(DATA_FILE)) return JSON.parse(fs.readFileSync(DATA_FILE, "utf8")); } catch (error) { console.error("Erro a ler data.json:", error.message); } return { products: [], orders: [], customers: [] }; }
-let db = loadData();
-function saveData() { fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), "utf8"); }
-
 const sessions = new Map();
 const SESSION_MS = 1000 * 60 * 60 * 8;
 const ADMIN_USER = process.env.ADMIN_USER || "";
@@ -44,20 +41,65 @@ function createSession(username) { const token = crypto.randomBytes(32).toString
 function requireAdmin(req, res, next) { const token = getCookie(req, "scaldase_session"); const session = token && sessions.get(token); if (!session || session.expires < Date.now()) { if (token) sessions.delete(token); return res.status(401).json({ error: "Não autenticado" }); } req.admin = session; next(); }
 function id() { return crypto.randomUUID(); }
 
+async function supabase(table, { method = "GET", query = "", body, prefer = "return=representation" } = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) throw new Error("Supabase não configurado no servidor.");
+  const headers = { apikey: SUPABASE_SECRET_KEY, Authorization: `Bearer ${SUPABASE_SECRET_KEY}` };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (prefer) headers.Prefer = prefer;
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await response.text();
+  let data = null;
+  if (text) { try { data = JSON.parse(text); } catch { data = text; } }
+  if (!response.ok) throw new Error(typeof data === "object" && data?.message ? data.message : `Supabase: erro ${response.status}`);
+  return data;
+}
+const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 app.get("/api/config", (req, res) => res.json({ mbway_payment_url: MBWAY_PAYMENT_URL, paypal_payment_url: PAYPAL_PAYMENT_URL, mbway_ready: Boolean(MBWAY_PAYMENT_URL), paypal_ready: Boolean(PAYPAL_PAYMENT_URL) }));
 app.post("/api/auth/login", (req, res) => { if (!ADMIN_USER || !ADMIN_PASSWORD) return res.status(503).json({ error: "O administrador ainda não foi configurado no servidor." }); const { username, password } = req.body || {}; if (username !== ADMIN_USER || password !== ADMIN_PASSWORD) return res.status(401).json({ error: "Utilizador ou palavra-passe incorretos." }); const token = createSession(username); res.setHeader("Set-Cookie", `scaldase_session=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${SESSION_MS / 1000}`); res.json({ ok: true, username }); });
 app.post("/api/auth/logout", (req, res) => { const token = getCookie(req, "scaldase_session"); if (token) sessions.delete(token); res.setHeader("Set-Cookie", "scaldase_session=; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=0"); res.json({ ok: true }); });
 app.get("/api/auth/me", requireAdmin, (req, res) => res.json({ ok: true, username: req.admin.username }));
 
-app.get("/api/products", (req, res) => res.json(db.products));
-app.post("/api/products", requireAdmin, (req, res) => { const product = { id: id(), name: String(req.body.name || "").trim(), description: String(req.body.description || "").trim(), price: Number(req.body.price || 0), stock: Number.isFinite(Number(req.body.stock)) ? Number(req.body.stock) : 0, status: ["available", "maintenance", "unavailable"].includes(req.body.status) ? req.body.status : "available", image: String(req.body.image || "").trim() }; if (!product.name) return res.status(400).json({ error: "Nome do produto é obrigatório." }); if (product.image && !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(product.image) && !/^https?:\/\//i.test(product.image)) return res.status(400).json({ error: "A fotografia deve ser uma imagem válida." }); db.products.push(product); saveData(); res.status(201).json(product); });
-app.put("/api/products/:id", requireAdmin, (req, res) => { const i = db.products.findIndex(p => p.id === req.params.id); if (i < 0) return res.sendStatus(404); db.products[i] = { ...db.products[i], ...req.body, id: db.products[i].id }; saveData(); res.json(db.products[i]); });
-app.delete("/api/products/:id", requireAdmin, (req, res) => { const before = db.products.length; db.products = db.products.filter(p => p.id !== req.params.id); if (db.products.length === before) return res.sendStatus(404); saveData(); res.sendStatus(204); });
+app.get("/api/products", asyncRoute(async (req, res) => res.json(await supabase("products", { query: "?select=*&order=created_at.desc" }))));
+app.post("/api/products", requireAdmin, asyncRoute(async (req, res) => {
+  const product = { id: id(), name: String(req.body.name || "").trim(), description: String(req.body.description || "").trim(), price: Number(req.body.price || 0), stock: Number.isFinite(Number(req.body.stock)) ? Number(req.body.stock) : 0, status: ["available", "maintenance", "unavailable"].includes(req.body.status) ? req.body.status : "available", image: String(req.body.image || "").trim() };
+  if (!product.name) return res.status(400).json({ error: "Nome do produto é obrigatório." });
+  if (product.image && !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(product.image) && !/^https?:\/\//i.test(product.image)) return res.status(400).json({ error: "A fotografia deve ser uma imagem válida." });
+  const rows = await supabase("products", { method: "POST", body: product }); res.status(201).json(rows[0]);
+}));
+app.put("/api/products/:id", requireAdmin, asyncRoute(async (req, res) => {
+  const allowed = ["name","description","price","stock","status","image"]; const patch = {};
+  for (const k of allowed) if (Object.prototype.hasOwnProperty.call(req.body || {}, k)) patch[k] = req.body[k];
+  if ("price" in patch) patch.price = Number(patch.price || 0); if ("stock" in patch) patch.stock = Number(patch.stock || 0);
+  const rows = await supabase("products", { method: "PATCH", query: `?id=eq.${encodeURIComponent(req.params.id)}`, body: patch });
+  if (!rows.length) return res.sendStatus(404); res.json(rows[0]);
+}));
+app.delete("/api/products/:id", requireAdmin, asyncRoute(async (req, res) => { await supabase("products", { method: "DELETE", query: `?id=eq.${encodeURIComponent(req.params.id)}`, prefer: "" }); res.sendStatus(204); }));
 
-app.get("/api/orders", requireAdmin, (req, res) => res.json(db.orders));
-app.post("/api/orders", (req, res) => { const order = { id: id(), customer_name: String(req.body.customer_name || "").trim(), phone: String(req.body.phone || "").trim(), email: String(req.body.email || "").trim(), items: Array.isArray(req.body.items) ? req.body.items : [], shipping: Number(req.body.shipping || 0), total: Number(req.body.total || 0), payment_method: String(req.body.payment_method || "pending"), payment_status: ["pending", "paid", "cancelled"].includes(req.body.payment_status) ? req.body.payment_status : "pending", order_status: ["new", "preparing", "shipped", "completed", "cancelled"].includes(req.body.order_status) ? req.body.order_status : "new", created_at: new Date().toISOString() }; if (!order.customer_name) return res.status(400).json({ error: "Nome do cliente é obrigatório." }); db.orders.push(order); const existing = db.customers.find(c => c.email && c.email === order.email && order.email); if (!existing) db.customers.push({ id: id(), name: order.customer_name, phone: order.phone, email: order.email, created_at: new Date().toISOString() }); saveData(); res.status(201).json(order); });
-app.put("/api/orders/:id", requireAdmin, (req, res) => { const i = db.orders.findIndex(o => o.id === req.params.id); if (i < 0) return res.sendStatus(404); db.orders[i] = { ...db.orders[i], ...req.body, id: db.orders[i].id }; saveData(); res.json(db.orders[i]); });
-app.get("/api/customers", requireAdmin, (req, res) => res.json(db.customers));
-app.get("/api/dashboard", requireAdmin, (req, res) => res.json({ products: db.products.length, low_stock: db.products.filter(p => Number(p.stock) <= 2 && p.status === "available").length, orders: db.orders.length, pending_orders: db.orders.filter(o => o.order_status === "new" || o.order_status === "preparing").length, pending_payments: db.orders.filter(o => o.payment_status === "pending").length, customers: db.customers.length, revenue_paid: db.orders.filter(o => o.payment_status === "paid").reduce((sum, o) => sum + Number(o.total || 0), 0) }));
-app.get("/api/health", (req, res) => res.json({ ok: true, service: "ScaldaseBeta 3D API" }));
+app.get("/api/orders", requireAdmin, asyncRoute(async (req, res) => res.json(await supabase("orders", { query: "?select=*&order=created_at.desc" }))));
+app.post("/api/orders", asyncRoute(async (req, res) => {
+  const order = { id: id(), customer_name: String(req.body.customer_name || "").trim(), phone: String(req.body.phone || "").trim(), email: String(req.body.email || "").trim(), items: Array.isArray(req.body.items) ? req.body.items : [], shipping: Number(req.body.shipping || 0), total: Number(req.body.total || 0), payment_method: String(req.body.payment_method || "pending"), payment_status: ["pending","paid","cancelled"].includes(req.body.payment_status) ? req.body.payment_status : "pending", order_status: ["new","preparing","shipped","completed","cancelled"].includes(req.body.order_status) ? req.body.order_status : "new", created_at: new Date().toISOString() };
+  if (!order.customer_name) return res.status(400).json({ error: "Nome do cliente é obrigatório." });
+  const rows = await supabase("orders", { method: "POST", body: order });
+  if (order.email) {
+    const found = await supabase("customers", { query: `?select=id&email=eq.${encodeURIComponent(order.email)}&limit=1` });
+    if (!found.length) await supabase("customers", { method: "POST", body: { id: id(), name: order.customer_name, phone: order.phone, email: order.email, created_at: new Date().toISOString() } });
+  }
+  res.status(201).json(rows[0]);
+}));
+app.put("/api/orders/:id", requireAdmin, asyncRoute(async (req, res) => {
+  const allowed = ["customer_name","phone","email","items","shipping","total","payment_method","payment_status","order_status"]; const patch = {};
+  for (const k of allowed) if (Object.prototype.hasOwnProperty.call(req.body || {}, k)) patch[k] = req.body[k];
+  const rows = await supabase("orders", { method: "PATCH", query: `?id=eq.${encodeURIComponent(req.params.id)}`, body: patch });
+  if (!rows.length) return res.sendStatus(404); res.json(rows[0]);
+}));
+app.get("/api/customers", requireAdmin, asyncRoute(async (req, res) => res.json(await supabase("customers", { query: "?select=*&order=created_at.desc" }))));
+
+app.get("/api/dashboard", requireAdmin, asyncRoute(async (req, res) => {
+  const [products, orders, customers] = await Promise.all([supabase("products", { query: "?select=*" }), supabase("orders", { query: "?select=*" }), supabase("customers", { query: "?select=*" })]);
+  res.json({ products: products.length, low_stock: products.filter(p => Number(p.stock) <= 2 && p.status === "available").length, orders: orders.length, pending_orders: orders.filter(o => o.order_status === "new" || o.order_status === "preparing").length, pending_payments: orders.filter(o => o.payment_status === "pending").length, customers: customers.length, revenue_paid: orders.filter(o => o.payment_status === "paid").reduce((sum, o) => sum + Number(o.total || 0), 0) });
+}));
+app.get("/api/health", asyncRoute(async (req, res) => { await supabase("products", { query: "?select=id&limit=1" }); res.json({ ok: true, service: "ScaldaseBeta 3D API", database: "supabase" }); }));
+
+app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: err.message || "Erro interno do servidor." }); });
 app.listen(PORT, () => console.log(`ScaldaseBeta API pronta na porta ${PORT}`));
