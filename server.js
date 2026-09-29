@@ -12,6 +12,14 @@ const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "3mb" }));
 
+app.get("/logo-site.jpg", (req, res, next) => {
+  try {
+    const data = fs.readFileSync(path.join(__dirname, "hero-logo.txt"), "utf8").trim();
+    const m = data.match(/^data:(image\/[^;]+);base64,(.+)$/);
+    if (!m) return res.status(404).end();
+    res.type(m[1]).send(Buffer.from(m[2], "base64"));
+  } catch (error) { next(error); }
+});
 app.get("/", (req, res, next) => {
   try {
     const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
