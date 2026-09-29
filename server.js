@@ -13,12 +13,7 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "3mb" }));
 
 app.get("/logo-site.jpg", (req, res, next) => {
-  try {
-    const data = fs.readFileSync(path.join(__dirname, "hero-logo.txt"), "utf8").trim();
-    const m = data.match(/^data:(image\/[^;]+);base64,(.+)$/);
-    if (!m) return res.status(404).end();
-    res.type(m[1]).send(Buffer.from(m[2], "base64"));
-  } catch (error) { next(error); }
+  res.sendFile(path.join(__dirname, "logo scaldasebeta.jpeg"), err => { if (err) next(err); });
 });
 app.get("/", (req, res, next) => {
   try {
