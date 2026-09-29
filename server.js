@@ -103,6 +103,7 @@ app.put("/api/orders/:id", requireAdmin, asyncRoute(async (req, res) => {
   const rows = await supabase("orders", { method: "PATCH", query: `?id=eq.${encodeURIComponent(req.params.id)}`, body: patch });
   if (!rows.length) return res.sendStatus(404); res.json(rows[0]);
 }));
+app.delete("/api/orders/:id", requireAdmin, asyncRoute(async (req, res) => { await supabase("orders", { method: "DELETE", query: `?id=eq.${encodeURIComponent(req.params.id)}`, prefer: "" }); res.sendStatus(204); }));
 app.get("/api/customers", requireAdmin, asyncRoute(async (req, res) => res.json(await supabase("customers", { query: "?select=*&order=created_at.desc" }))));
 
 app.get("/api/dashboard", requireAdmin, asyncRoute(async (req, res) => {
