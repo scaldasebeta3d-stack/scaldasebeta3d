@@ -64,7 +64,11 @@ app.get("/api/products", asyncRoute(async (req, res) => res.json(await supabase(
 app.post("/api/products", requireAdmin, asyncRoute(async (req, res) => {
   const product = { id: id(), name: String(req.body.name || "").trim(), description: String(req.body.description || "").trim(), price: Number(req.body.price || 0), stock: Number.isFinite(Number(req.body.stock)) ? Number(req.body.stock) : 0, status: ["available", "maintenance", "unavailable"].includes(req.body.status) ? req.body.status : "available", image: String(req.body.image || "").trim() };
   if (!product.name) return res.status(400).json({ error: "Nome do produto é obrigatório." });
-  if (product.image && !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(product.image) && !/^https?:\/\//i.test(product.image)) return res.status(400).json({ error: "A fotografia deve ser uma imagem válida." });
+  if (product.image) {
+    let images = [product.image];
+    try { const parsed = JSON.parse(product.image); if (Array.isArray(parsed)) images = parsed; } catch {}
+    if (images.length > 4 || images.some(img => typeof img !== "string" || (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(img) && !/^https?:\/\//i.test(img)))) return res.status(400).json({ error: "As fotografias devem ser imagens válidas (máximo 4)." });
+  }
   const rows = await supabase("products", { method: "POST", body: product }); res.status(201).json(rows[0]);
 }));
 app.put("/api/products/:id", requireAdmin, asyncRoute(async (req, res) => {
